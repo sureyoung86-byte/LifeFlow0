@@ -1,0 +1,1259 @@
+﻿
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>LifeFlow · 会话与任务原型（登录 & 删除版）</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#0EA5E9',
+            secondary: '#22D3EE',
+            title: '#0B1E4A',
+            card: '#0b1e4a0a'
+          },
+          spacing: { '128': '32rem' }
+        }
+      }
+    }
+  </script>
+  <style>
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .sidebar-transition { transition: all 0.25s ease; }
+    .card-shadow { box-shadow: 0 4px 20px rgba(17,24,39,0.06); }
+    .ring-shadow { filter: drop-shadow(0 4px 14px rgba(14,165,233,.25)); }
+    .tooltip { position: relative; }
+    .tooltip:hover::after {
+      content: attr(data-tip);
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: -32px;
+      background: rgba(17,24,39,.95);
+      color: #fff;
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: 50;
+    }
+    .floating-menu { position: fixed; top: 12px; left: 12px; z-index: 60; }
+    .menu { position: relative; }
+    .menu-panel { position: absolute; right: 0; top: 36px; z-index: 40; }
+  </style>
+</head>
+<body class="h-screen w-screen bg-gray-50 text-gray-800">
+  <!-- ===== Auth Page ===== -->
+  <div id="authPage" class="h-full w-full flex items-center justify-center p-6 hidden">
+    <div class="bg-white border border-gray-200 rounded-2xl w-[92vw] max-w-xl p-6 card-shadow">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center">
+          <!-- 简洁字符 logo -->
+          <div id="brandLogoDiv" class="w-10 h-10 bg-blue-600 rounded flex items-center justify-center text-white font-semibold">
+            LF
+          </div>
+          <span class="ml-2 text-xl font-bold text-title">LifeFlow</span>
+        </div>
+        <div class="text-sm text-gray-500">原型 · 本地登录</div>
+      </div>
+
+      <div class="flex rounded-xl bg-gray-100 p-1 text-sm font-medium">
+        <button id="tabLogin" class="flex-1 px-3 py-2 rounded-lg bg-white">登录</button>
+        <button id="tabRegister" class="flex-1 px-3 py-2 rounded-lg">注册</button>
+      </div>
+
+      <!-- Login -->
+      <form id="loginForm" class="mt-4 space-y-3">
+        <div>
+          <label class="block text-sm text-gray-600 mb-1">邮箱</label>
+          <input id="loginEmail" type="email" class="w-full border rounded-lg px-3 py-2" placeholder="you@example.com" required>
+        </div>
+        <div>
+          <label class="block text-sm text-gray-600 mb-1">密码</label>
+          <input id="loginPassword" type="password" class="w-full border rounded-lg px-3 py-2" placeholder="••••••••" required>
+        </div>
+        <div class="flex items-center justify-between">
+          <label class="text-sm flex items-center gap-2"><input id="rememberMe" type="checkbox"> 记住我</label>
+          <button type="button" id="toRegister" class="text-sm text-primary hover:underline">没有账号？去注册</button>
+        </div>
+        <button class="w-full bg-primary hover:bg-blue-600 text-white rounded-lg px-3 py-2">登录</button>
+        <p id="loginMsg" class="text-sm text-red-600"></p>
+      </form>
+
+      <!-- Register -->
+      <form id="registerForm" class="mt-4 space-y-3 hidden">
+        <div>
+          <label class="block text-sm text-gray-600 mb-1">昵称（可选）</label>
+          <input id="regName" type="text" class="w-full border rounded-lg px-3 py-2" placeholder="你的昵称">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-600 mb-1">邮箱</label>
+          <input id="regEmail" type="email" class="w-full border rounded-lg px-3 py-2" placeholder="you@example.com" required>
+        </div>
+        <div>
+          <label class="block text-sm text-gray-600 mb-1">密码</label>
+          <input id="regPassword" type="password" class="w-full border rounded-lg px-3 py-2" placeholder="至少 6 位" minlength="6" required>
+        </div>
+        <div>
+          <label class="block text-sm text-gray-600 mb-1">确认密码</label>
+          <input id="regConfirm" type="password" class="w-full border rounded-lg px-3 py-2" placeholder="再次输入密码" minlength="6" required>
+        </div>
+        <div class="flex items-center justify-between">
+          <button type="button" id="toLogin" class="text-sm text-primary hover:underline">已有账号？去登录</button>
+        </div>
+        <button class="w-full bg-gray-800 hover:bg-gray-900 text-white rounded-lg px-3 py-2">注册</button>
+        <p id="regMsg" class="text-sm text-red-600"></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== App Root ===== -->
+  <div id="appRoot" class="h-full w-full hidden">
+    <!-- 浮动菜单按钮（侧边栏收起时显示） -->
+    <button id="floatingMenuBtn" class="floating-menu hidden p-2 rounded-full bg-white border border-gray-200 shadow hover:bg-gray-50">
+      <span class="iconify text-xl" data-icon="mdi:menu"></span>
+    </button>
+
+    <div class="h-full w-full flex">
+      <!-- 左侧：功能栏 + 对话轮次 -->
+      <aside id="sidebar" class="w-80 bg-white border-r border-gray-200 flex flex-col sidebar-transition">
+        <!-- Brand + 折叠 -->
+        <div class="p-4 flex items-center justify-between">
+          <div class="flex items-center">
+          <div id="brandLogoDiv" class="w-10 h-10 bg-blue-600 rounded flex items-center justify-center text-white font-semibold">
+            LF
+          </div>
+            <span id="brandText" class="ml-2 text-xl font-bold text-title">LifeFlow</span>
+          </div>
+          <button id="toggleSidebar" class="tooltip p-2 rounded hover:bg-gray-100" data-tip="折叠侧边栏 / Expand">
+            <span class="iconify text-xl" data-icon="mdi:menu-open"></span>
+          </button>
+        </div>
+
+        <!-- 上半区：功能栏 -->
+        <div class="px-3">
+          <div class="text-xs font-semibold text-gray-500 px-2 mb-2">功能</div>
+          <nav>
+            <a href="#session" data-target="session" class="sidebar-link flex items-center p-3 rounded-lg bg-blue-50 text-primary tooltip" data-tip="会话">
+              <span class="iconify text-lg" data-icon="mdi:message-text"></span><span class="ml-3 label">会话</span>
+            </a>
+            <a href="#plan" data-target="plan" class="sidebar-link flex items-center p-3 rounded-lg hover:bg-gray-50 mt-1 tooltip" data-tip="任务计划">
+              <span class="iconify text-lg" data-icon="mdi:clipboard-list"></span><span class="ml-3 label">任务计划</span>
+            </a>
+            <a href="#focus" data-target="focus" class="sidebar-link flex items-center p-3 rounded-lg hover:bg-gray-50 mt-1 tooltip" data-tip="专注模式">
+              <span class="iconify text-lg" data-icon="mdi:clock"></span><span class="ml-3 label">专注模式</span>
+            </a>
+          </nav>
+        </div>
+
+        <!-- 分割线 -->
+        <div class="my-3 border-t border-gray-200"></div>
+
+        <!-- 下半区：对话轮次 -->
+        <div class="px-3 pb-3 flex-1 min-h-0 flex flex-col">
+          <div class="flex items-center justify-between px-2">
+            <div class="text-xs font-semibold text-gray-500">对话轮次</div>
+            <div class="space-x-2">
+              <button id="renameThreadBtn" class="text-xs px-2 py-1 rounded border hover:bg-gray-50">重命名</button>
+              <button id="newThreadBtn" class="text-xs px-2 py-1 rounded bg-primary text-white hover:bg-blue-600">新建</button>
+            </div>
+          </div>
+          <div id="threadList" class="mt-2 overflow-y-auto hide-scrollbar space-y-1 flex-1">
+            <!-- 动态渲染 -->
+          </div>
+        </div>
+      </aside>
+
+      <!-- 右侧主区域 -->
+      <main class="flex-1 flex flex-col">
+        <!-- 顶部栏 -->
+        <header class="bg-white border-b border-gray-200 p-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+              <div class="text-sm text-gray-500">工作区</div>
+              <div class="w-1 h-1 bg-gray-300 rounded-full"></div>
+              <h1 id="threadTitle" class="text-base md:text-lg font-semibold text-title">新对话</h1>
+            </div>
+            <div class="flex items-center space-x-2">
+              <!-- 选择机器人 -->
+              <div class="relative">
+                <button id="robotBtn" class="px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 flex items-center">
+                  <span class="iconify mr-2" data-icon="mdi:robot"></span>
+                  <span id="robotName" class="text-sm font-medium">摘要机器人</span>
+                  <span class="iconify ml-2 text-gray-500" data-icon="mdi:chevron-down"></span>
+                </button>
+                <div id="robotMenu" class="hidden absolute right-0 mt-2 w-52 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-20">
+                  <button class="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm" data-robot="摘要机器人">摘要机器人</button>
+                  <button class="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm" data-robot="任务化机器人">任务化机器人</button>
+                  <button class="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm" data-robot="分析机器人">分析机器人</button>
+                </div>
+              </div>
+              <!-- 对话记忆开关 -->
+              <div class="flex items-center pl-2 ml-2 border-l border-gray-200">
+                <span class="text-sm mr-2 text-gray-600">对话记忆</span>
+                <button id="memoryToggle" class="w-11 h-6 rounded-full bg-gray-300 relative transition">
+                  <span class="dot absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition"></span>
+                </button>
+              </div>
+              <!-- 用户菜单 -->
+              <div class="menu ml-2">
+                <button id="userBtn" class="px-2.5 py-2 rounded-lg border hover:bg-gray-50 flex items-center">
+                  <span class="iconify mr-2" data-icon="mdi:account-circle-outline"></span>
+                  <span id="userLabel" class="text-sm">-</span>
+                  <span class="iconify ml-1 text-gray-500" data-icon="mdi:chevron-down"></span>
+                </button>
+                <div id="userMenu" class="menu-panel hidden bg-white border border-gray-200 rounded-lg shadow-lg w-48 py-1">
+                  <button id="logoutBtn" class="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm">退出登录</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <!-- 页面：会话 -->
+        <section id="page-session" class="flex-1 flex flex-col">
+          <div id="chatScroll" class="flex-1 overflow-y-auto hide-scrollbar p-4 md:p-6 space-y-4">
+            <!-- 初始欢迎 -->
+            <div class="flex items-start space-x-3">
+              <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                <span class="iconify text-blue-600" data-icon="mdi:robot"></span>
+              </div>
+              <div class="max-w-3xl">
+                <div class="bg-white border border-gray-200 rounded-2xl px-4 py-3 shadow-sm">
+                  <p class="text-sm leading-7">你好！我是 <span class="font-medium" id="helloRobotName">摘要机器人</span>。你可以在下方输入问题，或点击左侧切换不同对话轮次。</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 输入区 -->
+          <div class="border-t border-gray-200 bg-white p-3 md:p-4">
+            <div class="max-w-4xl mx-auto">
+              <div class="rounded-2xl border border-gray-200 p-2 md:p-3 card-shadow">
+                <div class="flex items-center justify-between px-1 pb-2">
+                  <div class="flex items-center space-x-2">
+                    <label class="flex items-center px-2 py-1.5 rounded hover:bg-gray-100 cursor-pointer tooltip" data-tip="上传文件">
+                      <span class="iconify text-xl" data-icon="mdi:paperclip"></span>
+                      <input id="fileInput" type="file" class="hidden" multiple />
+                    </label>
+                    <div id="fileChips" class="flex flex-wrap gap-2"></div>
+                  </div>
+                  <div class="text-xs text-gray-400">回车发送 · Shift+回车换行</div>
+                </div>
+                <div class="flex items-end space-x-2">
+                  <textarea id="chatInput" rows="1" placeholder="给 LifeFlow 发消息…" class="flex-1 resize-none outline-none bg-transparent px-2 py-1 text-sm md:text-base max-h-40"></textarea>
+                  <button id="sendBtn" class="p-2 rounded-lg bg-primary text-white hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed">
+                    <span class="iconify text-xl" data-icon="mdi:arrow-up"></span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 页面：任务计划 -->
+        <section id="page-plan" class="hidden p-4 md:p-6">
+          <div class="max-w-6xl mx-auto">
+            <div class="flex items-center justify-between mb-4">
+              <div>
+                <h2 class="text-xl font-semibold text-title">今日任务计划</h2>
+                <p class="text-gray-500 text-sm">导入计划、从会话记忆提取，或手动新增。支持编辑/删除。</p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button id="importPlanBtn" class="px-3 py-2 rounded-lg border hover:bg-gray-50">
+                  <span class="iconify mr-1" data-icon="mdi:upload"></span> 导入计划(JSON)
+                </button>
+                <input id="importPlanInput" type="file" accept=".json" class="hidden" />
+                <button id="exportPlanBtn" class="px-3 py-2 rounded-lg border hover:bg-gray-50">
+                  <span class="iconify mr-1" data-icon="mdi:download"></span> 导出计划(JSON)
+                </button>
+                <button id="importFromChatBtn" class="px-3 py-2 rounded-lg border hover:bg-gray-50">
+                  <span class="iconify mr-1" data-icon="mdi:message-plus"></span> 从会话记忆导入
+                </button>
+                <button id="newTaskBtn" class="px-3 py-2 rounded-lg bg-primary text-white hover:bg-blue-600">
+                  <span class="iconify mr-1" data-icon="mdi:plus"></span> 新增任务
+                </button>
+              </div>
+            </div>
+
+            <div id="taskGrid" class="grid grid-cols-1 md:grid-cols-3 gap-5"></div>
+          </div>
+        </section>
+
+        <!-- 页面：专注模式（与上版一致，略） -->
+        <section id="page-focus" class="hidden p-4 md:p-6">
+          <div class="max-w-3xl mx-auto">
+            <h2 class="text-2xl font-semibold text-title text-center mb-6">专注模式</h2>
+
+            <div class="bg-white border border-gray-200 rounded-xl p-4 card-shadow mb-6">
+              <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div class="flex-1">
+                  <div class="text-sm text-gray-500">当前专注任务</div>
+                  <div class="text-lg font-semibold text-title" id="currentFocusTask">未选择</div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <select id="taskSelector" class="border rounded-lg px-3 py-2 min-w-[220px]">
+                    <option value="">选择任务...</option>
+                  </select>
+                  <button id="chooseTaskBtn" class="px-3 py-2 rounded-lg border hover:bg-gray-50">切换</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="relative w-64 h-64 mx-auto ring-shadow">
+              <svg class="w-full h-full transform -rotate-90">
+                <circle cx="50%" cy="50%" r="100" stroke="#E5E7EB" stroke-width="10" fill="none" stroke-linecap="round"></circle>
+                <circle id="progressRing" cx="50%" cy="50%" r="100" stroke="#0EA5E9" stroke-width="10" fill="none" stroke-linecap="round" stroke-dasharray="628" stroke-dashoffset="0"></circle>
+              </svg>
+              <div class="absolute inset-0 flex flex-col items-center justify-center">
+                <div id="timerText" class="text-4xl font-bold text-title">25:00</div>
+                <div id="statusText" class="text-gray-500">待开始</div>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-center gap-3 mt-8">
+              <button id="startFocusBtn" class="px-5 py-2 rounded-full bg-primary text-white hover:bg-blue-600">
+                <span class="iconify mr-1" data-icon="mdi:play"></span> 开始专注
+              </button>
+              <button id="pauseFocusBtn" class="px-5 py-2 rounded-full border hover:bg-gray-50" disabled>
+                <span class="iconify mr-1" data-icon="mdi:pause"></span> 暂停
+              </button>
+              <button id="stopFocusBtn" class="px-5 py-2 rounded-full border hover:bg-gray-50" disabled>
+                <span class="iconify mr-1" data-icon="mdi:stop"></span> 结束
+              </button>
+              <div class="flex items-center gap-2 ml-2">
+                <input id="minutesInput" type="number" min="5" max="120" value="25" class="w-20 border rounded-lg px-2 py-1" />
+                <span class="text-sm text-gray-500">分钟</span>
+              </div>
+            </div>
+
+            <!-- ESP32 控制（与上版一致） -->
+            <div class="bg-white border border-gray-200 rounded-xl p-4 card-shadow mt-8">
+              <div class="flex items-center justify-between">
+                <div class="text-title font-semibold">ESP32 LED 集成</div>
+                <div class="flex items-center">
+                  <span class="text-sm mr-2 text-gray-600">启用</span>
+                  <button id="espToggle" class="w-11 h-6 rounded-full bg-gray-300 relative transition">
+                    <span class="esp-dot absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition"></span>
+                  </button>
+                </div>
+              </div>
+              <div id="espConfig" class="mt-4 grid md:grid-cols-2 gap-4 hidden">
+                <div class="space-y-2">
+                  <div class="text-sm font-medium text-gray-700">控制方式</div>
+                  <div class="flex items-center gap-4">
+                    <label class="flex items-center gap-2"><input type="radio" name="espMode" value="http" checked> HTTP 请求</label>
+                    <label class="flex items-center gap-2"><input type="radio" name="espMode" value="serial"> Web Serial</label>
+                  </div>
+                </div>
+                <div class="space-y-2" id="httpConfig">
+                  <div class="text-sm font-medium text-gray-700">ESP32 地址（如 http://192.168.1.88）</div>
+                  <input id="espBaseUrl" type="text" class="w-full border rounded-lg px-3 py-2" placeholder="http://<你的ESP32局域网IP>" />
+                  <div class="text-xs text-gray-500">默认使用 /led?state=on|off 端点</div>
+                </div>
+                <div class="space-y-2 col-span-2 hidden" id="serialConfig">
+                  <button id="espConnectBtn" class="px-3 py-2 rounded-lg border hover:bg-gray-50">
+                    <span class="iconify mr-1" data-icon="mdi:usb-port"></span> 连接串口
+                  </button>
+                  <div class="text-xs text-gray-500">连接成功后，将在开始/暂停/结束时发送 "LED_ON" / "LED_OFF"。</div>
+                </div>
+                <div class="col-span-2">
+                  <button id="espTestBtn" class="px-3 py-2 rounded-lg bg-gray-800 text-white hover:bg-gray-900">测试LED</button>
+                  <span id="espStatus" class="ml-3 text-sm text-gray-600"></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card-shadow bg-blue-50 border border-blue-200 rounded-lg p-6 mt-6">
+              <p class="text-blue-800 text-center">专注结束将自动把当前任务标记为完成。</p>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- 通用 Toast -->
+    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 hidden px-4 py-2 rounded-full bg-gray-900 text-white text-sm shadow-lg"></div>
+
+    <!-- 简易模态框 -->
+    <div id="modal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50">
+      <div class="bg-white rounded-2xl w-[92vw] max-w-2xl p-5 border border-gray-200 card-shadow">
+        <div class="flex items-center justify-between mb-3">
+          <h3 id="modalTitle" class="text-lg font-semibold text-title">标题</h3>
+          <button id="modalClose" class="p-2 hover:bg-gray-100 rounded">
+            <span class="iconify" data-icon="mdi:close"></span>
+          </button>
+        </div>
+        <div id="modalBody" class="space-y-3"></div>
+        <div class="mt-4 flex justify-end gap-2">
+          <button id="modalCancel" class="px-3 py-2 rounded-lg border hover:bg-gray-50">取消</button>
+          <button id="modalOk" class="px-3 py-2 rounded-lg bg-primary text-white hover:bg-blue-600">确定</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /******************
+     * 配置 & 后端占位
+     ******************/
+    const API_CONFIG = {
+      useBackend: false,        // true 时将尝试调用后端
+      baseURL: '/api',          // 你的后端地址前缀
+      endpoints: {
+        login: '/auth/login',
+        register: '/auth/register'
+      }
+    };
+    async function apiLogin(email, password) {
+      if (!API_CONFIG.useBackend) return mockLogin(email, password);
+      const res = await fetch(API_CONFIG.baseURL + API_CONFIG.endpoints.login, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ email, password })
+      });
+      if (!res.ok) throw new Error('登录失败');
+      return await res.json();
+    }
+    async function apiRegister(name, email, password) {
+      if (!API_CONFIG.useBackend) return mockRegister(name, email, password);
+      const res = await fetch(API_CONFIG.baseURL + API_CONFIG.endpoints.register, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ name, email, password })
+      });
+      if (!res.ok) throw new Error('注册失败');
+      return await res.json();
+    }
+
+    /******************
+     * 本地模拟用户系统
+     ******************/
+    const USER_KEY = 'lifeflow_users';
+    function getUsers() { try { return JSON.parse(localStorage.getItem(USER_KEY)) || []; } catch { return []; } }
+    function setUsers(list) { localStorage.setItem(USER_KEY, JSON.stringify(list)); }
+    function hash(s){ return btoa(unescape(encodeURIComponent(s))); } // 演示用，非安全哈希
+    async function mockRegister(name, email, password) {
+      const users = getUsers();
+      if (users.some(u => u.email === email)) throw new Error('邮箱已注册');
+      const user = { name: name||email.split('@')[0], email, pass: hash(password) };
+      users.push(user); setUsers(users);
+      return { user, token: 'local.' + Date.now() };
+    }
+    async function mockLogin(email, password) {
+      const users = getUsers();
+      const u = users.find(x => x.email === email);
+      if (!u || u.pass !== hash(password)) throw new Error('邮箱或密码错误');
+      return { user: { name: u.name, email: u.email }, token: 'local.' + Date.now() };
+    }
+
+    /******************
+     * 全局状态与持久化
+     ******************/
+    const state = {
+      user: null,     // {name,email}
+      token: null,
+      memoryOn: false,
+      robot: '摘要机器人',
+      threads: [],   // { id, title, messages: [{role, text, files: [name]}] }
+      activeId: null,
+      tasks: [],     // { id, title, priority, checklist: [{text, done}], status }  status: idle|focusing|paused|done
+      focus: {
+        currentTaskId: null,
+        minutes: 25,
+        remainingSec: 25 * 60,
+        timer: null,
+        running: false,
+      },
+      esp: { enabled: false, mode: 'http', baseUrl: '', serialPort: null, serialWriter: null },
+      ui: { sidebarCollapsed: false }
+    };
+    const STORAGE_KEY = 'lifeflow_v3_state';
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        user: state.user, token: state.token,
+        memoryOn: state.memoryOn, robot: state.robot,
+        threads: state.threads, activeId: state.activeId,
+        tasks: state.tasks,
+        focus: { currentTaskId: state.focus.currentTaskId, minutes: state.focus.minutes },
+        esp: { enabled: state.esp.enabled, mode: state.esp.mode, baseUrl: state.esp.baseUrl },
+        ui: { sidebarCollapsed: state.ui.sidebarCollapsed }
+      }));
+    }
+    function loadState() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      try {
+        const data = JSON.parse(raw);
+        Object.assign(state, {
+          user: data.user ?? null, token: data.token ?? null,
+          memoryOn: data.memoryOn ?? state.memoryOn, robot: data.robot ?? state.robot,
+          threads: data.threads ?? state.threads, activeId: data.activeId ?? state.activeId,
+          tasks: data.tasks ?? state.tasks,
+          focus: { ...state.focus, currentTaskId: data.focus?.currentTaskId ?? null, minutes: data.focus?.minutes ?? 25, remainingSec: (data.focus?.minutes ?? 25) * 60 },
+          esp: { ...state.esp, enabled: data.esp?.enabled ?? false, mode: data.esp?.mode ?? 'http', baseUrl: data.esp?.baseUrl ?? '' },
+          ui: { sidebarCollapsed: !!data.ui?.sidebarCollapsed }
+        });
+      } catch(e) { console.warn('load state failed', e); }
+    }
+
+    /*************
+     * DOM 获取（Auth）
+     *************/
+    const authPage = document.getElementById('authPage');
+    const appRoot = document.getElementById('appRoot');
+    const tabLogin = document.getElementById('tabLogin');
+    const tabRegister = document.getElementById('tabRegister');
+    const loginForm = document.getElementById('loginForm');
+    const registerForm = document.getElementById('registerForm');
+    const loginEmail = document.getElementById('loginEmail');
+    const loginPassword = document.getElementById('loginPassword');
+    const rememberMe = document.getElementById('rememberMe');
+    const loginMsg = document.getElementById('loginMsg');
+    const regName = document.getElementById('regName');
+    const regEmail = document.getElementById('regEmail');
+    const regPassword = document.getElementById('regPassword');
+    const regConfirm = document.getElementById('regConfirm');
+    const regMsg = document.getElementById('regMsg');
+    const toRegister = document.getElementById('toRegister');
+    const toLogin = document.getElementById('toLogin');
+
+    /*************
+     * DOM 获取（App）
+     *************/
+    const sidebar = document.getElementById('sidebar');
+    const brandText = document.getElementById('brandText');
+    const toggleSidebarBtn = document.getElementById('toggleSidebar');
+    const floatingMenuBtn = document.getElementById('floatingMenuBtn');
+    const threadList = document.getElementById('threadList');
+    const newThreadBtn = document.getElementById('newThreadBtn');
+    const renameThreadBtn = document.getElementById('renameThreadBtn');
+    const threadTitle = document.getElementById('threadTitle');
+    const helloRobotName = document.getElementById('helloRobotName');
+    const robotBtn = document.getElementById('robotBtn');
+    const robotMenu = document.getElementById('robotMenu');
+    const robotName = document.getElementById('robotName');
+    const memoryToggle = document.getElementById('memoryToggle');
+    const dot = memoryToggle.querySelector('.dot');
+    const userBtn = document.getElementById('userBtn');
+    const userMenu = document.getElementById('userMenu');
+    const userLabel = document.getElementById('userLabel');
+    const logoutBtn = document.getElementById('logoutBtn');
+
+    const pageSession = document.getElementById('page-session');
+    const pagePlan = document.getElementById('page-plan');
+    const pageFocus = document.getElementById('page-focus');
+
+    const chatScroll = document.getElementById('chatScroll');
+    const chatInput = document.getElementById('chatInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const fileInput = document.getElementById('fileInput');
+    const fileChips = document.getElementById('fileChips');
+
+    const taskGrid = document.getElementById('taskGrid');
+    const importPlanBtn = document.getElementById('importPlanBtn');
+    const importPlanInput = document.getElementById('importPlanInput');
+    const exportPlanBtn = document.getElementById('exportPlanBtn');
+    const importFromChatBtn = document.getElementById('importFromChatBtn');
+    const newTaskBtn = document.getElementById('newTaskBtn');
+
+    // focus
+    const currentFocusTaskEl = document.getElementById('currentFocusTask');
+    const taskSelector = document.getElementById('taskSelector');
+    const chooseTaskBtn = document.getElementById('chooseTaskBtn');
+    const progressRing = document.getElementById('progressRing');
+    const timerText = document.getElementById('timerText');
+    const statusText = document.getElementById('statusText');
+    const startFocusBtn = document.getElementById('startFocusBtn');
+    const pauseFocusBtn = document.getElementById('pauseFocusBtn');
+    const stopFocusBtn = document.getElementById('stopFocusBtn');
+    const minutesInput = document.getElementById('minutesInput');
+
+    // ESP
+    const espToggle = document.getElementById('espToggle');
+    const espDot = espToggle.querySelector('.esp-dot');
+    const espConfig = document.getElementById('espConfig');
+    const espBaseUrl = document.getElementById('espBaseUrl');
+    const espConnectBtn = document.getElementById('espConnectBtn');
+    const espTestBtn = document.getElementById('espTestBtn');
+    const espStatus = document.getElementById('espStatus');
+    const httpConfig = document.getElementById('httpConfig');
+    const serialConfig = document.getElementById('serialConfig');
+
+    // toast + modal
+    const toast = document.getElementById('toast');
+    const modal = document.getElementById('modal');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalBody = document.getElementById('modalBody');
+    const modalClose = document.getElementById('modalClose');
+    const modalCancel = document.getElementById('modalCancel');
+    const modalOk = document.getElementById('modalOk');
+
+    /*************
+     * 工具
+     *************/
+    function showToast(text) {
+      toast.textContent = text;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 1400);
+    }
+    function autoGrow(el) {
+      el.style.height = 'auto';
+      el.style.height = (el.scrollHeight) + 'px';
+    }
+    function showModal(title, bodyHTML, okLabel='确定', onOk=null) {
+      modalTitle.textContent = title;
+      modalBody.innerHTML = bodyHTML;
+      modal.classList.remove('hidden');
+      const ok = () => { if (onOk) onOk(); modal.classList.add('hidden'); };
+      const cancel = () => modal.classList.add('hidden');
+      modalOk.textContent = okLabel;
+      modalOk.onclick = ok;
+      modalClose.onclick = cancel;
+      modalCancel.onclick = cancel;
+      modal.addEventListener('click', (e) => { if (e.target === modal) cancel(); }, { once: true });
+    }
+    function downloadJSON(filename, data) {
+      const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    /*****************
+     * Auth: 切换与提交
+     *****************/
+    function switchTab(to) {
+      if (to === 'login') {
+        tabLogin.classList.add('bg-white');
+        tabRegister.classList.remove('bg-white');
+        loginForm.classList.remove('hidden');
+        registerForm.classList.add('hidden');
+      } else {
+        tabRegister.classList.add('bg-white');
+        tabLogin.classList.remove('bg-white');
+        loginForm.classList.add('hidden');
+        registerForm.classList.remove('hidden');
+      }
+    }
+    tabLogin.onclick = () => switchTab('login');
+    tabRegister.onclick = () => switchTab('register');
+    toRegister.onclick = () => switchTab('register');
+    toLogin.onclick = () => switchTab('login');
+
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      loginMsg.textContent = '';
+      try {
+        const { user, token } = await apiLogin(loginEmail.value.trim(), loginPassword.value);
+        state.user = user; state.token = token; saveState();
+        enterApp();
+      } catch (err) { loginMsg.textContent = err.message || '登录失败'; }
+    });
+    registerForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      regMsg.textContent = '';
+      if (regPassword.value !== regConfirm.value) { regMsg.textContent = '两次密码不一致'; return; }
+      try {
+        await apiRegister(regName.value.trim(), regEmail.value.trim(), regPassword.value);
+        showToast('注册成功，请登录'); switchTab('login');
+        loginEmail.value = regEmail.value;
+      } catch (err) { regMsg.textContent = err.message || '注册失败'; }
+    });
+
+    function enterApp() {
+      authPage.classList.add('hidden');
+      appRoot.classList.remove('hidden');
+      userLabel.textContent = state.user?.name || state.user?.email || '-';
+      initAppViews();
+    }
+    function leaveApp() {
+      appRoot.classList.add('hidden');
+      authPage.classList.remove('hidden');
+      switchTab('login');
+    }
+
+    /*****************
+     * 侧边栏行为
+     *****************/
+    function setSidebarCollapsed(collapsed) {
+      state.ui.sidebarCollapsed = collapsed;
+      if (collapsed) {
+        sidebar.classList.remove('w-80'); sidebar.classList.add('w-20');
+        brandText.classList.add('hidden');
+        document.querySelectorAll('.label').forEach(el => el.classList.add('hidden'));
+        floatingMenuBtn.classList.remove('hidden');
+      } else {
+        sidebar.classList.remove('w-20'); sidebar.classList.add('w-80');
+        brandText.classList.remove('hidden');
+        document.querySelectorAll('.label').forEach(el => el.classList.remove('hidden'));
+        floatingMenuBtn.classList.add('hidden');
+      }
+      saveState();
+    }
+    toggleSidebarBtn.addEventListener('click', () => setSidebarCollapsed(!sidebar.classList.contains('w-20')));
+    floatingMenuBtn.addEventListener('click', () => setSidebarCollapsed(false));
+
+    // 顶部菜单
+    robotBtn.addEventListener('click', () => robotMenu.classList.toggle('hidden'));
+    document.addEventListener('click', (e) => {
+      if (!robotBtn.contains(e.target)) robotMenu.classList.add('hidden');
+      if (!userBtn.contains(e.target)) userMenu.classList.add('hidden');
+    });
+    userBtn.addEventListener('click', () => userMenu.classList.toggle('hidden'));
+    logoutBtn.addEventListener('click', () => {
+      state.user = null; state.token = null; saveState(); leaveApp();
+    });
+
+    // 切页面
+    document.querySelectorAll('.sidebar-link').forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const target = link.dataset.target;
+        document.querySelectorAll('.sidebar-link').forEach(a => a.classList.remove('bg-blue-50','text-primary'));
+        link.classList.add('bg-blue-50','text-primary');
+
+        pageSession.classList.add('hidden');
+        pagePlan.classList.add('hidden');
+        pageFocus.classList.add('hidden');
+        if (target === 'session') pageSession.classList.remove('hidden');
+        if (target === 'plan') pagePlan.classList.remove('hidden');
+        if (target === 'focus') pageFocus.classList.remove('hidden');
+      })
+    });
+
+    /*****************
+     * 机器人与记忆
+     *****************/
+    robotMenu.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.robot = btn.dataset.robot;
+        robotName.textContent = state.robot;
+        helloRobotName.textContent = state.robot;
+        robotMenu.classList.add('hidden');
+        showToast(`已切换至「${state.robot}」`);
+        saveState();
+      });
+    });
+    function setMemoryUI() {
+      if (state.memoryOn) {
+        memoryToggle.classList.remove('bg-gray-300'); memoryToggle.classList.add('bg-blue-600'); dot.style.left = '1.5rem';
+      } else {
+        memoryToggle.classList.add('bg-gray-300'); memoryToggle.classList.remove('bg-blue-600'); dot.style.left = '0.125rem';
+      }
+    }
+    memoryToggle.addEventListener('click', () => {
+      state.memoryOn = !state.memoryOn; setMemoryUI(); saveState();
+      showToast(state.memoryOn ? '对话记忆已开启' : '对话记忆已关闭');
+    });
+
+    /***************
+     * 线程/聊天区
+     ***************/
+    function newThread(title = '新对话') {
+      const id = 't' + Date.now();
+      const thread = { id, title, messages: [] };
+      state.threads.unshift(thread);
+      state.activeId = id;
+      renderThreads(); renderChat();
+      threadTitle.textContent = title;
+      saveState();
+    }
+    function renameThread() {
+      const thread = state.threads.find(x => x.id === state.activeId);
+      if (!thread) return;
+      showModal('重命名对话', `<input id="renameInput" class="w-full border rounded-lg px-3 py-2" value="${thread.title}">`, '保存', () => {
+        const v = document.getElementById('renameInput').value.trim();
+        if (v) { thread.title = v; threadTitle.textContent = v; renderThreads(); saveState(); }
+      });
+    }
+    renameThreadBtn.addEventListener('click', renameThread);
+
+    function renderThreads() {
+      threadList.innerHTML = '';
+      state.threads.forEach(t => {
+        const last = t.messages[t.messages.length - 1];
+        const preview = last ? (last.text || '').slice(0, 16) : '（空对话）';
+        const active = t.id === state.activeId;
+
+        const item = document.createElement('button');
+        item.className = `w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100 ${active ? 'bg-gray-100' : ''}`;
+        item.innerHTML = `
+          <div class="text-sm font-medium truncate">${t.title}</div>
+          <div class="text-xs text-gray-500 truncate">${preview}</div>`;
+        item.addEventListener('click', () => {
+          state.activeId = t.id; renderThreads(); renderChat(); threadTitle.textContent = t.title; saveState();
+        });
+        threadList.appendChild(item);
+      });
+    }
+    function addBubble(role, text, files = [], appendToState = true) {
+      const isUser = role === 'user';
+      const wrap = document.createElement('div');
+      wrap.className = `flex items-start space-x-3 ${isUser ? 'justify-end space-x-reverse' : ''}`;
+
+      const avatar = `
+        <div class="w-8 h-8 rounded-full ${isUser ? 'bg-blue-600' : 'bg-blue-100'} flex items-center justify-center">
+          <span class="iconify ${isUser ? 'text-white' : 'text-blue-600'}" data-icon="${isUser ? 'mdi:account' : 'mdi:robot'}"></span>
+        </div>`;
+
+      const fileHtml = files && files.length ? `<div class="mt-2 flex flex-wrap gap-2">${files.map(name => `<span class="inline-flex items-center text-xs bg-gray-100 border border-gray-200 px-2 py-1 rounded">${name}</span>`).join('')}</div>` : '';
+
+      const bubble = `
+        <div class="max-w-3xl"><div class="${isUser ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200'} rounded-2xl px-4 py-3 shadow-sm">
+          <div class="text-sm leading-7 whitespace-pre-wrap">${text || ''}</div>${fileHtml}
+        </div></div>`;
+
+      wrap.innerHTML = isUser ? (bubble + avatar) : (avatar + bubble);
+      chatScroll.appendChild(wrap);
+      chatScroll.scrollTop = chatScroll.scrollHeight;
+
+      if (appendToState) {
+        const thread = state.threads.find(x => x.id === state.activeId);
+        thread.messages.push({ role, text, files });
+        renderThreads(); saveState();
+      }
+    }
+    function renderChat() {
+      const thread = state.threads.find(x => x.id === state.activeId);
+      chatScroll.innerHTML = '';
+      const hello = document.createElement('div');
+      hello.className = 'flex items-start space-x-3';
+      hello.innerHTML = `
+        <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+          <span class="iconify text-blue-600" data-icon="mdi:robot"></span>
+        </div>
+        <div class="max-w-3xl">
+          <div class="bg-white border border-gray-200 rounded-2xl px-4 py-3 shadow-sm">
+            <p class="text-sm leading-7">你好！我是 <span class="font-medium">${state.robot}</span>。你可以在下方输入问题，或点击左侧切换不同对话轮次。</p>
+          </div>
+        </div>`;
+      chatScroll.appendChild(hello);
+      thread?.messages.forEach(m => addBubble(m.role, m.text, m.files, false));
+      chatScroll.scrollTop = chatScroll.scrollHeight;
+    }
+    function handleSend() {
+      const text = chatInput.value.trim();
+      const files = Array.from(fileChips.querySelectorAll('[data-file]')).map(x => x.dataset.file);
+      if (!text && files.length === 0) return;
+      addBubble('user', text, files);
+      chatInput.value = ''; fileChips.innerHTML = ''; autoGrow(chatInput);
+
+      setTimeout(() => addBubble('assistant', `（${state.robot}）已收到：` + (text ? `"${text}"` : '文件消息'), []), 350);
+    }
+    sendBtn.addEventListener('click', handleSend);
+    chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+    });
+    chatInput.addEventListener('input', () => autoGrow(chatInput));
+    fileInput.addEventListener('change', () => {
+      for (const f of fileInput.files) {
+        const chip = document.createElement('span');
+        chip.className = 'inline-flex items-center text-xs bg-gray-100 border border-gray-200 px-2 py-1 rounded';
+        chip.dataset.file = f.name;
+        chip.innerHTML = `<span class="iconify mr-1" data-icon="mdi:file-outline"></span>${f.name}<button class="ml-1 hover:text-red-600" title="移除"><span class="iconify" data-icon="mdi:close"></span></button>`;
+        chip.querySelector('button').addEventListener('click', () => chip.remove());
+        fileChips.appendChild(chip);
+      }
+      fileInput.value = '';
+    });
+    newThreadBtn.addEventListener('click', () => newThread('新对话'));
+
+    /*****************
+     * 任务计划（新增：编辑 & 删除 & 导出）
+     *****************/
+    function addTask(task) {
+      state.tasks.push(task);
+      renderTasks(); refreshTaskSelector(); saveState();
+    }
+    function createTask({ title, priority='medium', checklist=[] }) {
+      return { id: 'task_' + Math.random().toString(36).slice(2,9), title, priority, checklist: checklist.map(t => ({ text:t, done:false })), status: 'idle' };
+    }
+    function priorityTag(p) {
+      const map = { high: ['高优先级','bg-red-100 text-red-800'], medium: ['中优先级','bg-amber-100 text-amber-800'], low: ['低优先级','bg-green-100 text-green-800'] };
+      const [txt, cls] = map[p] || map.medium;
+      return `<span class="${cls} text-xs rounded-full px-2 py-1">${txt}</span>`;
+    }
+    function renderTasks() {
+      taskGrid.innerHTML = '';
+      state.tasks.forEach(task => {
+        const card = document.createElement('div');
+        card.className = `card-shadow bg-white border ${task.status==='focusing' ? 'border-blue-400' : 'border-gray-200'} rounded-xl p-5 relative`;
+        const checklistHTML = (task.checklist || []).map((c, idx) => `
+          <label class="flex items-center gap-2 text-sm">
+            <input data-check="${task.id}|${idx}" type="checkbox" ${c.done?'checked':''} />
+            <span class="${c.done?'line-through text-gray-400':''}">${c.text}</span>
+          </label>`).join('') || `<p class="text-sm text-gray-500">无子任务</p>`;
+
+        // 操作菜单
+        const menu = `
+          <div class="menu absolute right-3 top-3">
+            <button class="px-2 py-1 text-gray-500 hover:bg-gray-100 rounded" data-menu-btn="${task.id}">
+              <span class="iconify" data-icon="mdi:dots-vertical"></span>
+            </button>
+            <div class="menu-panel hidden bg-white border border-gray-200 rounded-lg shadow-lg w-36 py-1" data-menu-panel="${task.id}">
+              <button class="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm" data-edit="${task.id}">编辑</button>
+              <button class="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm text-red-600" data-delete="${task.id}">删除</button>
+            </div>
+          </div>`;
+
+        const statusBtn = task.status==='focusing' ?
+          `<button data-pause="${task.id}" class="bg-blue-600 text-white px-3 py-1 rounded-lg flex items-center"><span class="iconify mr-1" data-icon="mdi:pause"></span><span>暂停</span></button>` :
+          `<button data-start="${task.id}" class="bg-blue-100 text-blue-700 px-3 py-1 rounded-lg flex items-center"><span class="iconify mr-1" data-icon="mdi:clock-start"></span><span>进入专注</span></button>`;
+        const doneBtn = `<button data-done="${task.id}" class="text-gray-500 tooltip" data-tip="标记完成"><span class="iconify" data-icon="mdi:check"></span></button>`;
+
+        card.innerHTML = `
+          ${menu}
+          <div class="flex justify-between items-start pr-8">
+            <h3 class="font-semibold text-lg">${task.title}</h3>
+            ${priorityTag(task.priority)}
+          </div>
+          <div class="my-4 space-y-2">${checklistHTML}</div>
+          <div class="flex justify-between items-center mt-4">
+            ${statusBtn}
+            <div class="flex space-x-2">
+              ${doneBtn}
+            </div>
+          </div>`;
+
+        // 事件：复选
+        card.querySelectorAll('input[type="checkbox"][data-check]').forEach(cb => {
+          cb.addEventListener('change', () => {
+            const [tid, idx] = cb.dataset.check.split('|');
+            const t = state.tasks.find(x => x.id===tid);
+            t.checklist[idx].done = cb.checked;
+            renderTasks(); saveState();
+          });
+        });
+
+        // 事件：菜单开关
+        const menuBtn = card.querySelector(`[data-menu-btn="${task.id}"]`);
+        const menuPanel = card.querySelector(`[data-menu-panel="${task.id}"]`);
+        menuBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          document.querySelectorAll('.menu-panel').forEach(p => p.classList.add('hidden'));
+          menuPanel.classList.toggle('hidden');
+        });
+        document.addEventListener('click', () => menuPanel.classList.add('hidden'));
+
+        // 事件：开始/暂停/完成
+        const startBtn = card.querySelector(`[data-start="${task.id}"]`);
+        const pauseBtn = card.querySelector(`[data-pause="${task.id}"]`);
+        const doneBtnEl = card.querySelector(`[data-done="${task.id}"]`);
+        if (startBtn) startBtn.addEventListener('click', () => { selectFocusTask(task.id); switchToFocusAndStart(); });
+        if (pauseBtn) pauseBtn.addEventListener('click', () => { if (state.focus.running) pauseFocus(); });
+        if (doneBtnEl) doneBtnEl.addEventListener('click', () => { task.status='done'; renderTasks(); refreshTaskSelector(); saveState(); });
+
+        // 事件：编辑
+        const editBtn = card.querySelector(`[data-edit="${task.id}"]`);
+        editBtn.addEventListener('click', () => {
+          menuPanel.classList.add('hidden');
+          showModal('编辑任务', `
+            <label class="block text-sm font-medium text-gray-700">标题</label>
+            <input id="editTitle" class="w-full border rounded-lg px-3 py-2" value="${task.title}">
+            <label class="block text-sm font-medium text-gray-700 mt-3">优先级</label>
+            <select id="editPriority" class="w-full border rounded-lg px-3 py-2">
+              <option value="high" ${task.priority==='high'?'selected':''}>高</option>
+              <option value="medium" ${task.priority==='medium'?'selected':''}>中</option>
+              <option value="low" ${task.priority==='low'?'selected':''}>低</option>
+            </select>
+            <label class="block text-sm font-medium text-gray-700 mt-3">子任务（每行一项）</label>
+            <textarea id="editChecklist" rows="4" class="w-full border rounded-lg px-3 py-2">${task.checklist.map(c=>c.text).join('\n')}</textarea>
+          `,'保存', () => {
+            const title = document.getElementById('editTitle').value.trim();
+            const priority = document.getElementById('editPriority').value;
+            const checklist = document.getElementById('editChecklist').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean).map(s=>({text:s,done:false}));
+            if (title) { task.title = title; task.priority = priority; task.checklist = checklist; renderTasks(); refreshTaskSelector(); saveState(); }
+          });
+        });
+
+        // 事件：删除（你提的“可自定义删除”）
+        const delBtn = card.querySelector(`[data-delete="${task.id}"]`);
+        delBtn.addEventListener('click', () => {
+          menuPanel.classList.add('hidden');
+          showModal('删除任务', `<p>确定要删除任务「${task.title}」吗？</p>`, '删除', () => {
+            // 若正在专注该任务，先停止
+            if (state.focus.currentTaskId === task.id) stopFocus(false);
+            state.tasks = state.tasks.filter(x => x.id !== task.id);
+            renderTasks(); refreshTaskSelector(); saveState();
+            showToast('已删除任务');
+          });
+        });
+
+        taskGrid.appendChild(card);
+      });
+    }
+
+    // 导入/导出
+    importPlanBtn.addEventListener('click', () => importPlanInput.click());
+    importPlanInput.addEventListener('change', () => {
+      const f = importPlanInput.files[0]; if (!f) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          if (Array.isArray(data)) {
+            data.forEach(item => addTask(createTask(item)));
+            showToast('已导入计划');
+          } else { showToast('JSON 格式需为数组'); }
+        } catch { showToast('解析失败'); }
+      };
+      reader.readAsText(f);
+      importPlanInput.value = '';
+    });
+    exportPlanBtn.addEventListener('click', () => {
+      const data = state.tasks.map(t => ({ title: t.title, priority: t.priority, checklist: t.checklist.map(c=>c.text) }));
+      downloadJSON('lifeflow_tasks.json', data);
+    });
+
+    // 从会话记忆导入
+    importFromChatBtn.addEventListener('click', () => {
+      const threadsHTML = state.threads.map((t,i) => `
+        <details class="border rounded-lg p-2">
+          <summary class="cursor-pointer font-medium">${t.title}</summary>
+          <div class="max-h-48 overflow-y-auto mt-2 space-y-2">
+            ${t.messages.map((m, j) => `<label class="flex items-start gap-2">
+              <input type="checkbox" data-import-msg="${i}|${j}" />
+              <span class="text-sm ${m.role==='assistant' ? 'text-gray-700' : 'text-gray-900'} whitespace-pre-wrap">${(m.text||'').slice(0,300)}</span>
+            </label>`).join('')}
+          </div>
+        </details>`).join('') || '<p class="text-sm text-gray-500">暂无对话内容。</p>';
+      showModal('从会话记忆导入任务', `
+        <p class="text-sm text-gray-600">勾选包含任务的消息，系统会按行拆分（-、•、1. 开头或换行）。</p>
+        <div class="space-y-2 max-h-80 overflow-y-auto">${threadsHTML}</div>
+      `, '导入', () => {
+        const checks = modalBody.querySelectorAll('[data-import-msg]:checked');
+        let count = 0;
+        checks.forEach(chk => {
+          const [ti, mi] = chk.dataset.importMsg.split('|').map(Number);
+          const msg = state.threads[ti]?.messages[mi]?.text || '';
+          const lines = msg.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+          const items = lines.map(s => s.replace(/^[-•\d\.\)\s]+/, '')).filter(Boolean);
+          items.forEach(title => { addTask(createTask({ title })); count++; });
+        });
+        showToast(count ? `导入 ${count} 条任务` : '未识别到任务');
+      });
+    });
+
+    // 新增任务
+    newTaskBtn.addEventListener('click', () => {
+      showModal('新增任务', `
+        <label class="block text-sm font-medium text-gray-700">标题</label>
+        <input id="taskTitleInput" class="w-full border rounded-lg px-3 py-2" placeholder="例如：完成季度汇报PPT">
+        <label class="block text-sm font-medium text-gray-700 mt-3">优先级</label>
+        <select id="taskPriorityInput" class="w-full border rounded-lg px-3 py-2">
+          <option value="high">高</option>
+          <option value="medium" selected>中</option>
+          <option value="low">低</option>
+        </select>
+        <label class="block text-sm font-medium text-gray-700 mt-3">子任务（每行一项，可留空）</label>
+        <textarea id="taskChecklistInput" class="w-full border rounded-lg px-3 py-2" rows="4" placeholder="- 数据整理
+- 撰写文案"></textarea>
+      `, '添加', () => {
+        const title = document.getElementById('taskTitleInput').value.trim();
+        if (!title) return;
+        const priority = document.getElementById('taskPriorityInput').value;
+        const checklist = document.getElementById('taskChecklistInput').value.split(/\r?\n/).map(s => s.replace(/^[-•\s]+/, '').trim()).filter(Boolean);
+        addTask(createTask({ title, priority, checklist }));
+      });
+    });
+
+    /*****************
+     * 专注模式（与上版一致）
+     *****************/
+    function refreshTaskSelector() {
+      taskSelector.innerHTML = `<option value="">选择任务...</option>` + state.tasks.filter(t => t.status!=='done').map(t => `<option value="${t.id}">${t.title}</option>`).join('');
+    }
+    function selectFocusTask(id) {
+      state.focus.currentTaskId = id || null;
+      const t = state.tasks.find(x => x.id===id);
+      currentFocusTaskEl.textContent = t ? t.title : '未选择';
+      taskSelector.value = id || '';
+      saveState();
+    }
+    function setProgress(percent) {
+      const total = 2 * Math.PI * 100;
+      const offset = total * (1 - percent);
+      progressRing.setAttribute('stroke-dasharray', total);
+      progressRing.setAttribute('stroke-dashoffset', offset);
+    }
+    function renderTimerUI() {
+      const m = Math.floor(state.focus.remainingSec / 60).toString().padStart(2, '0');
+      const s = Math.floor(state.focus.remainingSec % 60).toString().padStart(2, '0');
+      timerText.textContent = `${m}:${s}`;
+      const total = state.focus.minutes * 60;
+      const percent = Math.max(0, Math.min(1, 1 - state.focus.remainingSec / total));
+      setProgress(percent);
+    }
+    function startFocus() {
+      if (!state.focus.currentTaskId) { showToast('请先选择任务'); return; }
+      if (state.focus.running) return;
+      state.focus.running = true;
+      startFocusBtn.disabled = true; pauseFocusBtn.disabled = false; stopFocusBtn.disabled = false;
+      statusText.textContent = '专注进行中';
+      const t = state.tasks.find(x => x.id===state.focus.currentTaskId);
+      if (t) t.status = 'focusing';
+      renderTasks();
+      if (!state.focus.remainingSec || state.focus.remainingSec === state.focus.minutes*60) {
+        state.focus.remainingSec = state.focus.minutes * 60;
+      }
+      state.focus.timer = setInterval(() => {
+        if (state.focus.remainingSec > 0) {
+          state.focus.remainingSec--;
+          renderTimerUI();
+        } else {
+          stopFocus(true);
+        }
+      }, 1000);
+      espSend(true); saveState();
+    }
+    function pauseFocus() {
+      if (!state.focus.running) return;
+      clearInterval(state.focus.timer);
+      state.focus.running = false;
+      startFocusBtn.disabled = false; pauseFocusBtn.disabled = true; stopFocusBtn.disabled = false;
+      statusText.textContent = '已暂停';
+      const t = state.tasks.find(x => x.id===state.focus.currentTaskId);
+      if (t) t.status = 'paused';
+      renderTasks();
+      espSend(false); saveState();
+    }
+    function stopFocus(finished=false) {
+      clearInterval(state.focus.timer);
+      state.focus.running = false;
+      startFocusBtn.disabled = false; pauseFocusBtn.disabled = true; stopFocusBtn.disabled = true;
+      statusText.textContent = finished ? '已完成' : '未开始';
+      if (finished) playBeep();
+      const t = state.tasks.find(x => x.id===state.focus.currentTaskId);
+      if (t) t.status = finished ? 'done' : 'idle';
+      state.focus.remainingSec = state.focus.minutes * 60;
+      renderTimerUI(); renderTasks(); refreshTaskSelector();
+      espSend(false); saveState();
+    }
+    function switchToFocusAndStart() {
+      document.querySelector('[data-target="focus"]').click();
+      renderTimerUI();
+      startFocus();
+    }
+    chooseTaskBtn.addEventListener('click', () => selectFocusTask(taskSelector.value));
+    minutesInput.addEventListener('change', () => {
+      const v = Math.max(5, Math.min(120, Number(minutesInput.value)||25));
+      state.focus.minutes = v; state.focus.remainingSec = v*60; renderTimerUI(); saveState();
+    });
+    startFocusBtn.addEventListener('click', startFocus);
+    pauseFocusBtn.addEventListener('click', pauseFocus);
+    stopFocusBtn.addEventListener('click', () => stopFocus(false));
+
+    function playBeep() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = 880;
+        o.connect(g); g.connect(ctx.destination);
+        g.gain.setValueAtTime(0.0001, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + 0.01);
+        o.start();
+        setTimeout(() => { g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.2); o.stop(ctx.currentTime + 0.25); }, 250);
+      } catch {}
+    }
+
+    /*****************
+     * ESP32 控制（与上版一致）
+     *****************/
+    function setEspUI() {
+      if (state.esp.enabled) {
+        espToggle.classList.remove('bg-gray-300'); espToggle.classList.add('bg-blue-600'); espDot.style.left = '1.5rem';
+        espConfig.classList.remove('hidden');
+      } else {
+        espToggle.classList.add('bg-gray-300'); espToggle.classList.remove('bg-blue-600'); espDot.style.left = '0.125rem';
+        espConfig.classList.add('hidden');
+      }
+      document.querySelectorAll('input[name="espMode"]').forEach(r => r.checked = (r.value===state.esp.mode));
+      espBaseUrl.value = state.esp.baseUrl || '';
+      httpConfig.classList.toggle('hidden', state.esp.mode!=='http');
+      serialConfig.classList.toggle('hidden', state.esp.mode!=='serial');
+    }
+    espToggle.addEventListener('click', () => { state.esp.enabled = !state.esp.enabled; setEspUI(); saveState(); });
+    document.querySelectorAll('input[name="espMode"]').forEach(r => {
+      r.addEventListener('change', () => { state.esp.mode = r.value; setEspUI(); saveState(); });
+    });
+    espBaseUrl.addEventListener('change', () => { state.esp.baseUrl = espBaseUrl.value.trim(); saveState(); });
+
+    async function espSend(on) {
+      if (!state.esp.enabled) return;
+      if (state.esp.mode === 'http') {
+        if (!state.esp.baseUrl) { espStatus.textContent = '请设置 ESP32 地址'; return; }
+        try {
+          const url = state.esp.baseUrl.replace(/\/+$/,'') + '/led?state=' + (on?'on':'off');
+          await fetch(url, { method:'GET' });
+          espStatus.textContent = on ? 'LED：ON' : 'LED：OFF';
+        } catch (e) { espStatus.textContent = 'HTTP 连接失败'; }
+      } else if (state.esp.mode === 'serial') {
+        if (!('serial' in navigator)) { espStatus.textContent = '浏览器不支持 Web Serial'; return; }
+        try {
+          if (!state.esp.serialWriter) { espStatus.textContent = '未连接串口'; return; }
+          const data = new TextEncoder().encode(on ? 'LED_ON\n' : 'LED_OFF\n');
+          await state.esp.serialWriter.write(data);
+          espStatus.textContent = on ? 'LED：ON' : 'LED：OFF';
+        } catch { espStatus.textContent = '串口发送失败'; }
+      }
+    }
+    espTestBtn.addEventListener('click', () => espSend(true).then(() => setTimeout(() => espSend(false), 600)));
+    espConnectBtn?.addEventListener('click', async () => {
+      try {
+        const port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 115200 });
+        const writer = port.writable.getWriter();
+        state.esp.serialPort = port; state.esp.serialWriter = writer;
+        espStatus.textContent = '串口连接成功';
+      } catch { espStatus.textContent = '串口连接失败'; }
+    });
+
+    /*****************
+     * 初始化
+     *****************/
+    function bootstrapDemoData() {
+      if (state.threads.length === 0) newThread('新对话');
+      if (state.tasks.length === 0) {
+        addTask(createTask({ title: '完成季度汇报PPT', priority: 'high', checklist: ['整理销售数据','编写项目进展'] }));
+        addTask(createTask({ title: '客户项目需求分析', priority: 'medium', checklist: [] }));
+        addTask(createTask({ title: '团队周会准备', priority: 'low', checklist: ['梳理阻碍点'] }));
+      }
+    }
+    function initAppViews() {
+      setMemoryUI();
+      renderThreads();
+      renderChat();
+      renderTasks();
+      refreshTaskSelector();
+      selectFocusTask(state.focus.currentTaskId);
+      minutesInput.value = state.focus.minutes;
+      renderTimerUI();
+      setEspUI();
+      setSidebarCollapsed(state.ui.sidebarCollapsed);
+      document.querySelector('[data-target="session"]').click();
+    }
+
+    function init() {
+      loadState();
+      if (state.user && state.user.email) {
+        enterApp();
+      } else {
+        leaveApp();
+      }
+      bootstrapDemoData();
+      saveState();
+    }
+    init();
+  </script>
+</body>
+</html>
+
